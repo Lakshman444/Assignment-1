@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="3cd2d5cd-1295-4192-978c-66341ddb5b98" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="123456" database="studentdetails" />
+	</db:config>
+	<flow name="assignment" doc:id="78f6212e-11c2-46f5-8a82-6c35537bdc99" >
+		<db:select doc:id="77f1ae6c-e596-4ac8-a4e3-bfae08084a62" config-ref="Database_Config" doc:name="Select" >
+			<db:sql ><![CDATA[select * from details where USERID in (:userid1,:userid2,:userid3)]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	userid1: attributes.queryParams.userId1,
+	userid2: attributes.queryParams.userId2,
+	userid3: attributes.queryParams.userId3
+}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="26cecd7e-535c-44f4-95c9-d8fa4e681917" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="65757843-a4ef-4984-91ec-e033140bf3bb" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map{
+	message : "select userid," ++ $.COLUMNNAMES ++ " FROM " ++ $.TABLENAMES ++ " WHERE USERID = '" ++ $.USERID ++ "'"
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<parallel-foreach doc:name="Parallel For Each" doc:id="934aeacf-e9a4-4242-babd-fdd14f398cfd" >
+			<db:select doc:id="afa6ad0c-68c9-44df-8618-1c3c0f9845e3" config-ref="Database_Config" doc:name="Select" >
+				<db:sql ><![CDATA[#[payload.message]]]></db:sql>
+			</db:select>
+		</parallel-foreach>
+		<ee:transform doc:name="Transform Message" doc:id="0c28fc4f-7d71-4391-bb73-d52e7b935657" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload.payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="9b0ae5d6-1fa8-418a-87d1-0d98a4625e11" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+(((flatten(payload)) groupBy $.userid
+mapObject(value,key,index) ->{
+    (key):value reduce($$ ++ $)
+})orderBy $.userid) groupBy $.DEPTID
+
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>
